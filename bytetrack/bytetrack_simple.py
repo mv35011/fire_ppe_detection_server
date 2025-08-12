@@ -43,7 +43,7 @@ class SimpleTrack:
 class SimpleBYTETracker:
     """Simplified BYTE tracker implementation"""
 
-    def __init__(self, track_thresh=0.5, track_buffer=30, match_thresh=0.8):
+    def __init__(self, track_thresh=0.5, track_buffer=60, match_thresh=0.8):
         self.track_thresh = track_thresh
         self.track_buffer = track_buffer
         self.match_thresh = match_thresh

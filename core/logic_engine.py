@@ -59,9 +59,12 @@ def process_logic(results_queue: Queue, alert_queue: Queue):
     print("[Logic Engine] 🟢 Starting...")
 
     trackers = {}
+    # --- UPDATED: State now tracks cooldowns for each violation type ---
     tracked_person_states = defaultdict(lambda: {
-        "name": "Unknown", "last_alert_time": 0,
-        "violation_confirm_counter": 0, "current_violations": set()
+        "name": "Unknown",
+        "last_alert_times": defaultdict(float),  # Key: violation_name, Value: timestamp
+        "violation_confirm_counter": 0,
+        "current_violations": set()
     })
 
     face_recognizer = FaceRecognizer()
@@ -74,13 +77,16 @@ def process_logic(results_queue: Queue, alert_queue: Queue):
 
             camera_id, original_frame, all_detections = data["camera_id"], data["original_frame"], data["detections"]
 
-            # --- DEBUG: Print all received class names ---
-            # This will show you the exact names your models are outputting.
             all_class_names = [d['class_name'] for d in all_detections]
             print(f"[Logic Engine] [DEBUG] Cam {camera_id} received detections: {all_class_names}")
 
             if camera_id not in trackers:
-                trackers[camera_id] = SimpleBYTETracker(track_thresh=config.CONF_THRESHOLD)
+                # --- UPDATED: Initialize tracker with settings from config ---
+                trackers[camera_id] = SimpleBYTETracker(
+                    track_thresh=config.TRACK_THRESH,
+                    track_buffer=config.TRACK_BUFFER,
+                    match_thresh=config.MATCH_THRESH
+                )
 
             person_dets_track = []
             ppe_items = []
@@ -119,24 +125,41 @@ def process_logic(results_queue: Queue, alert_queue: Queue):
                 missing_ppe = REQUIRED_PPE - detected_ppe_for_person
                 violations_this_frame = explicit_violations.union({f"missing-{item}" for item in missing_ppe})
 
+                # --- UPDATED: More forgiving temporal filtering logic ---
                 if violations_this_frame:
-                    state["violation_confirm_counter"] += 1
-                    state["current_violations"].update(violations_this_frame)
+                    # Increment counter, but don't let it go way above the threshold
+                    state["violation_confirm_counter"] = min(config.VIOLATION_CONFIRM_FRAMES,
+                                                             state["violation_confirm_counter"] + 1)
+                    state["current_violations"] = violations_this_frame
                 else:
-                    state["violation_confirm_counter"] = 0
-                    state["current_violations"].clear()
+                    # Decrement the counter if no violation is seen, but don't go below zero
+                    state["violation_confirm_counter"] = max(0, state["violation_confirm_counter"] - 1)
+                    # Clear the violations only when the counter is fully reset
+                    if state["violation_confirm_counter"] == 0:
+                        state["current_violations"].clear()
 
+                # --- UPDATED: Per-violation cooldown logic ---
                 if state["violation_confirm_counter"] >= config.VIOLATION_CONFIRM_FRAMES:
                     current_time = time.time()
-                    if (current_time - state["last_alert_time"]) > config.ALERT_COOLDOWN_SECONDS:
+                    new_alerts_to_send = []
+
+                    for violation in state["current_violations"]:
+                        # Check the cooldown for this specific violation
+                        if (current_time - state["last_alert_times"][violation]) > config.ALERT_COOLDOWN_SECONDS:
+                            new_alerts_to_send.append(violation)
+                            # Update the timestamp for this violation only
+                            state["last_alert_times"][violation] = current_time
+
+                    if new_alerts_to_send:
                         alert = {
                             "type": "ppe_violation", "camera_id": camera_id,
                             "person_name": state["name"], "track_id": track_id,
-                            "violations": list(state["current_violations"]),
+                            "violations": new_alerts_to_send,  # Send only the new, non-cooled-down violations
                         }
                         alert_queue.put(alert)
-                        state["last_alert_time"] = current_time
-                        state["violation_confirm_counter"] = 0
+
+                    # Reset the confirmation counter after checking to prevent immediate re-triggering
+                    state["violation_confirm_counter"] = 0
 
             for alert in env_alerts:
                 alert_data = {
