@@ -1,8 +1,8 @@
 # --- Video Input Settings ---
 CAMERA_FEEDS = {
-    0: r"D:\Compressed\ppe_fire_final_server\videos\20250809_102632.mp4",
-    1: r"D:\Compressed\ppe_fire_final_server\videos\Helmet Googles Jacket No Boots No Gloves.mp4",
-    2: r"D:\Compressed\ppe_fire_final_server\videos\fire.mp4"
+    0: r"videos\20250809_102632 (1).mp4",
+    1: r"videos\fire.mp4",
+    2: r"videos\Helmet Googles Jacket No Boots No Gloves (1).mp4"
 }
 TARGET_FPS = 10
 
@@ -18,24 +18,20 @@ CONF_THRESHOLD = 0.1
 IOU_THRESHOLD = 0.2
 
 # --- Face Recognition Settings ---
-# This should point to your .npy file with face embeddings
+# Paths to your .npy files
 FACE_EMBEDDINGS_PATH = "data/embeddings.npy"
+# ❗ UPDATED: Added a specific path for your names file.
+FACE_NAMES_PATH = "data/n.npy"
+
+# The similarity score required to consider a face a match.
+# ❗ UPDATED: Lowered threshold to a more reasonable value for ArcFace.
+FACE_RECOGNITION_THRESHOLD = 0.7
 
 # --- Logic Engine Settings ---
-# Number of consecutive frames a violation must be detected before an alert is triggered.
-# Lower this to make alerts more frequent for testing.
 VIOLATION_CONFIRM_FRAMES = 3
-
-# Cooldown in seconds for each specific violation type per person.
 ALERT_COOLDOWN_SECONDS = 10
 
 # --- ByteTrack Settings ---
-# High-confidence detection threshold for matching
 TRACK_THRESH = 0.5
-
-# How many frames to keep a track alive after it's lost.
-# Increasing this can help with unstable tracking.
 TRACK_BUFFER = 60
-
-# IoU threshold for matching detections to existing tracks.
 MATCH_THRESH = 0.8

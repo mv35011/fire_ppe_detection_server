@@ -2,3 +2,6 @@ venv/
 models/
 newworks/
 videos/
+results/
+temp_videos/
+videos
